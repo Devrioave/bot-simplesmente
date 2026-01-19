@@ -1,0 +1,37 @@
+# --- Python & Ambiente Virtual ---
+# Nunca envies a pasta da venv, ela é específica para a tua máquina
+.venv/
+venv/
+env/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# --- Cache e ficheiros temporários ---
+# Ficheiros compilados pelo Python que "sujam" o repositório
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+
+# --- Configurações e Segurança ---
+# JAMAIS envies o .env para o Git. Ele terá as tuas chaves da Evolution API
+.env
+.env.test
+.env.local
+
+# --- Ferramentas de Desenvolvimento (IDEs) ---
+# Configurações pessoais do teu editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Sistema Operativo ---
+# Ficheiros que o Windows e o macOS criam automaticamente
+Thumbs.db
+db.json
+Desktop.ini
+.DS_Store
