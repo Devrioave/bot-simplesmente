@@ -1,13 +1,12 @@
 from pydantic import BaseModel
 from typing import Optional
 
-class MensagemInput(BaseModel):
-    mensagem: str  # Texto que vem do cliente
-
 class ChamadoInput(BaseModel):
+    # Este campo é essencial para processar o "Oi" ou saudações
+    mensagem: Optional[str] = None  
     nome: Optional[str] = None
     telefone: Optional[str] = None
     email: Optional[str] = None
     motivo: Optional[str] = None
-    descricao: Optional[str] = None # No JS está como 'descricao' sem o 'ã'
+    descricao: Optional[str] = None
     is_formulario: bool = False

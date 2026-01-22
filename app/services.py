@@ -1,39 +1,79 @@
 from app.schemas import ChamadoInput
 
 def obter_resposta_suporte(dados: ChamadoInput) -> str:
-    # 1. Definição do Formulário Padrão (Baseado na interface da Simplesmente)
+    # 1. Template do Formulário da Simplesmente
     formulario_template = (
-        "Para abrir o seu chamado, copie e preencha os dados abaixo:\n\n"
         "*NOME:* \n"
         "*TELEFONE:* \n"
         "*E-MAIL:* \n"
-        "*MOTIVO:* (Suporte técnico / Dúvida / Solicitação / Outro)\n"
+        "*MOTIVO:* (Suporte técnico / Serviços / Outros)\n"
         "*DESCRIÇÃO:* "
     )
 
-    # 2. Lógica: O n8n identificou que é um formulário preenchido?
-    # Usamos o booleano que vem do seu nó de JavaScript no n8n
+    # 2. Template de Catálogo de Serviços (Resumido)
+    servicos_template = (
+        "💻 *Computação:* TI Gerenciada, Nuvem, Cibersegurança, Software e Backup.\n"
+        "🛡️ *CFTV & Segurança:* Instalação, Alarmes, Controlo de Acesso e Monitorização.\n"
+        "🌐 *Redes:* Conectividade, Wi-Fi Corporativo e Infraestrutura."
+    )
+
+    # 3. Se o formulário já foi preenchido e identificado pelo n8n
     if dados.is_formulario:
         return (
-            f"✅ *Chamado Registrado!*\n\n"
-            f"Olá {dados.nome}, recebemos a sua solicitação sobre '{dados.motivo}'. "
-            "Os nossos consultores da Simplesmente irão analisar os dados e "
-            "entraremos em contato em breve pelo e-mail ou telefone fornecido."
+            f"✅ *Solicitação Recebida com Sucesso!*\n\n"
+            f"Obrigado, {dados.nome}. Registamos o seu chamado sobre '{dados.motivo}'.\n\n"
+            "🚀 *Próximo passo:* A nossa equipa na *Simplesmente* fará a triagem e "
+            "receberá um retorno em breve por este canal."
         )
 
-    # 3. Lógica para saudações ou mensagens iniciais
-    # Para isto funcionar, adicione a chave 'mensagem' no seu nó JavaScript do n8n
-    texto_usuario = (dados.mensagem or "").lower()
-    
-    if any(saudacao in texto_usuario for saudacao in ["oi", "olá", "bom dia", "ajuda", "chamado"]):
+    # 4. Lógica de Diálogos e Instruções
+    texto_usuario = (dados.mensagem or "").lower().strip()
+
+    # Fluxo: Saudação Inicial
+    if any(s in texto_usuario for s in ["oi", "olá", "bom dia", "boa tarde", "boa noite"]):
         return (
-            "Olá! Bem-vindo ao suporte da Simplesmente. 🛠️\n\n"
+            "Olá! 👋 Seja bem-vindo ao atendimento da *Simplesmente*.\n\n"
+            "Como posso ajudar hoje?\n"
+            "1️⃣ *Suporte técnico*\n"
+            "2️⃣ *Serviços*\n"
+            "3️⃣ *Outros*\n\n"
+            "Digite o número ou o nome da opção desejada."
+        )
+
+    # Fluxo 1: Suporte técnico
+    if any(s in texto_usuario for s in ["1", "suporte", "técnico", "tecnico"]):
+        return (
+            "Entendido! Para suporte técnico na *Simplesmente*, "
+            "precisamos de alguns detalhes. 🛠️\n\n"
+            "Copie a mensagem abaixo, preencha e envie de volta:\n\n"
             f"{formulario_template}"
         )
-    
-    # 4. Caso o bot receba algo que não seja o formulário nem uma saudação
+
+    # Fluxo 2: Serviços (Catálogo + Formulário)
+    if any(s in texto_usuario for s in ["2", "serviço", "serviços"]):
+        return (
+            "Ficamos felizes pelo interesse nos nossos serviços! 💡\n\n"
+            f"{servicos_template}\n\n"
+        )
+
+    # Fluxo 3: Outros
+    if any(s in texto_usuario for s in ["3", "outros", "outro", "consultor", "falar"]):
+        return (
+            "Para outros assuntos ou falar com um consultor da *Simplesmente*, "
+            "precisamos identificar a sua necessidade. 👨‍💻\n\n"
+            "Por favor, use o modelo abaixo para detalhar a sua solicitação:\n\n"
+            f"{formulario_template}"
+        )
+
+    # Fluxo: Agradecimentos
+    if any(s in texto_usuario for s in ["obrigado", "valeu", "obrigada"]):
+        return "A *Simplesmente* agradece o seu contato! Tenha um ótimo dia! 😊"
+
+    # Resposta Padrão (Fallback)
     return (
-        "Não consegui identificar a sua solicitação. 🤔\n"
-        "Se deseja abrir um chamado, por favor utilize o formato abaixo:\n\n"
-        f"{formulario_template}"
+        "Ainda não entendi muito bem... 🤔\n\n"
+        "Se precisa de ajuda na *Simplesmente*, escolha uma das opções:\n"
+        "1️⃣ Suporte técnico\n"
+        "2️⃣ Serviços\n"
+        "3️⃣ Outros"
     )
