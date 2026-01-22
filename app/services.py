@@ -1,6 +1,7 @@
 from app.schemas import ChamadoInput
+from app.integrations import enviar_para_laravel # Importação da integração
 
-def obter_resposta_suporte(dados: ChamadoInput) -> str:
+async def obter_resposta_suporte(dados: ChamadoInput) -> str:
     # 1. Template do Formulário da Simplesmente
     formulario_template = (
         "*NOME:* \n"
@@ -19,12 +20,22 @@ def obter_resposta_suporte(dados: ChamadoInput) -> str:
 
     # 3. Se o formulário já foi preenchido e identificado pelo n8n
     if dados.is_formulario:
-        return (
-            f"✅ *Solicitação Recebida com Sucesso!*\n\n"
-            f"Obrigado, {dados.nome}. Registamos o seu chamado sobre '{dados.motivo}'.\n\n"
-            "🚀 *Próximo passo:* A nossa equipa na *Simplesmente* fará a triagem e "
-            "receberá um retorno em breve por este canal."
-        )
+        # Chamada assíncrona para enviar os dados ao Laravel
+        sucesso = await enviar_para_laravel(dados)
+        
+        if sucesso:
+            return (
+                f"✅ *Solicitação Recebida com Sucesso!*\n\n"
+                f"Obrigado, {dados.nome}. Registamos o seu chamado sobre '{dados.motivo}' no nosso sistema.\n\n"
+                "🚀 *Próximo passo:* A nossa equipa na *Simplesmente* fará a triagem e "
+                "receberá um retorno em breve por este canal."
+            )
+        else:
+            return (
+                "⚠️ *Erro ao registar no sistema.*\n\n"
+                "Pedimos desculpa, mas não conseguimos guardar o seu chamado no sistema Laravel neste momento. "
+                "Por favor, tente enviar novamente o formulário em instantes."
+            )
 
     # 4. Lógica de Diálogos e Instruções
     texto_usuario = (dados.mensagem or "").lower().strip()
@@ -54,6 +65,8 @@ def obter_resposta_suporte(dados: ChamadoInput) -> str:
         return (
             "Ficamos felizes pelo interesse nos nossos serviços! 💡\n\n"
             f"{servicos_template}\n\n"
+            "Para avançarmos com a sua solicitação, por favor preencha o formulário abaixo:\n\n"
+            f"{formulario_template}"
         )
 
     # Fluxo 3: Outros
@@ -67,7 +80,7 @@ def obter_resposta_suporte(dados: ChamadoInput) -> str:
 
     # Fluxo: Agradecimentos
     if any(s in texto_usuario for s in ["obrigado", "valeu", "obrigada"]):
-        return "A *Simplesmente* agradece o seu contato! Tenha um ótimo dia! 😊"
+        return "A *Simplesmente* agradece o seu contacto! Tenha um ótimo dia! 😊"
 
     # Resposta Padrão (Fallback)
     return (
