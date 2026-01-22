@@ -1,92 +1,85 @@
+import random
 from app.schemas import ChamadoInput
-from app.integrations import enviar_para_laravel # Importação da integração
+from app.integrations import enviar_para_laravel
 
-async def obter_resposta_suporte(dados: ChamadoInput) -> str:
-    # 1. Template do Formulário da Simplesmente
-    formulario_template = (
+# --- Dicionário de Mensagens (Facilita a manutenção) ---
+TEXTOS = {
+    "saudacoes": [
+        "Olá! 👋 Seja bem-vindo ao atendimento da *Simplesmente*. Como posso ajudar?",
+        "Oi! Tudo bem? 😊 Sou o assistente da *Simplesmente*. No que posso ser útil hoje?",
+        "Bem-vindo! 🚀 Você está no canal de suporte e serviços da *Simplesmente*."
+    ],
+    "menu_principal": (
+        "Escolha uma das opções abaixo:\n\n"
+        "1️⃣ *Abrir Chamado Técnico* (Suporte)\n"
+        "2️⃣ *Conhecer Nossos Serviços* (Portfólio)\n"
+        "3️⃣ *Falar com um Consultor*"
+    ),
+    "modelo_chamado": (
+        "🛠️ *Abertura de Chamado*\n\n"
+        "Para que nossa equipe técnica possa te ajudar, copie, preencha e envie a mensagem abaixo:\n\n"
+        "----------------------------\n"
         "*NOME:* \n"
         "*TELEFONE:* \n"
         "*E-MAIL:* \n"
-        "*MOTIVO:* (Suporte técnico / Serviços / Outros)\n"
-        "*DESCRIÇÃO:* "
+        "*MOTIVO:* (Suporte técnico / Dúvida / Instalação)\n"
+        "*DESCRIÇÃO:* \n"
+        "----------------------------"
+    ),
+    "servicos_detalhados": (
+        "💡 *Nossas Soluções na Simplesmente:*\n\n"
+        "💻 *Infraestrutura de TI:* Gestão de servidores, backup em nuvem e suporte remoto.\n\n"
+        "🛡️ *Segurança Eletrônica:* Instalação de câmeras (CFTV), alarmes e controle de acesso.\n\n"
+        "🌐 *Redes & Conectividade:* Configuração de Wi-Fi corporativo, cabeamento estruturado e fibra óptica.\n\n"
+        "Caso queira um orçamento específico, escolha a opção *1* para detalhar sua necessidade no formulário."
     )
+}
 
-    # 2. Template de Catálogo de Serviços (Resumido)
-    servicos_template = (
-        "💻 *Computação:* TI Gerenciada, Nuvem, Cibersegurança, Software e Backup.\n"
-        "🛡️ *CFTV & Segurança:* Instalação, Alarmes, Controlo de Acesso e Monitorização.\n"
-        "🌐 *Redes:* Conectividade, Wi-Fi Corporativo e Infraestrutura."
-    )
-
-    # 3. Se o formulário já foi preenchido e identificado pelo n8n
+async def obter_resposta_suporte(dados: ChamadoInput) -> str:
+    """
+    Orquestra os diálogos do bot Simplesmente.
+    """
+    
+    # 1. Fluxo de Envio para o Laravel (Formulário preenchido)
     if dados.is_formulario:
-        # Chamada assíncrona para enviar os dados ao Laravel
         sucesso = await enviar_para_laravel(dados)
-        
         if sucesso:
             return (
-                f"✅ *Solicitação Recebida com Sucesso!*\n\n"
-                f"Obrigado, {dados.nome}. Registamos o seu chamado sobre '{dados.motivo}' no nosso sistema.\n\n"
-                "🚀 *Próximo passo:* A nossa equipa na *Simplesmente* fará a triagem e "
-                "receberá um retorno em breve por este canal."
+                f"✅ *Chamado Registrado!* \n\n"
+                f"Obrigado, {dados.nome}. Seus dados foram enviados para o nosso sistema.\n"
+                "🚀 Em breve, um técnico entrará em contato pelo seu telefone ou e-mail."
             )
         else:
-            return (
-                "⚠️ *Erro ao registar no sistema.*\n\n"
-                "Pedimos desculpa, mas não conseguimos guardar o seu chamado no sistema Laravel neste momento. "
-                "Por favor, tente enviar novamente o formulário em instantes."
-            )
+            return "⚠️ *Erro de Conexão:* Não consegui salvar seu chamado no sistema. Por favor, tente novamente em instantes."
 
-    # 4. Lógica de Diálogos e Instruções
-    texto_usuario = (dados.mensagem or "").lower().strip()
+    # 2. Processamento da Mensagem do Usuário
+    mensagem = (dados.mensagem or "").lower().strip()
 
-    # Fluxo: Saudação Inicial
-    if any(s in texto_usuario for s in ["oi", "olá", "bom dia", "boa tarde", "boa noite"]):
+    # --- Fluxo 1: Saudação e Menu Principal ---
+    if any(s in mensagem for s in ["oi", "olá", "ola", "bom dia", "boa tarde", "boa noite", "inicio", "voltar"]):
+        saudacao = random.choice(TEXTOS["saudacoes"])
+        return f"{saudacao}\n\n{TEXTOS['menu_principal']}"
+
+    # --- Fluxo 2: Suporte Técnico (Opção 1) ---
+    if any(s in mensagem for s in ["1", "suporte", "chamado", "tecnico", "técnico"]):
+        return TEXTOS["modelo_chamado"]
+
+    # --- Fluxo 3: Serviços (Opção 2) ---
+    if any(s in mensagem for s in ["2", "serviço", "serviços", "portfolio", "portfólio"]):
+        return f"{TEXTOS['servicos_detalhados']}\n\nPara voltar ao menu, digite *Início*."
+
+    # --- Fluxo 4: Falar com Humano (Opção 3) ---
+    if any(s in mensagem for s in ["3", "consultor", "humano", "falar", "atendente"]):
         return (
-            "Olá! 👋 Seja bem-vindo ao atendimento da *Simplesmente*.\n\n"
-            "Como posso ajudar hoje?\n"
-            "1️⃣ *Suporte técnico*\n"
-            "2️⃣ *Serviços*\n"
-            "3️⃣ *Outros*\n\n"
-            "Digite o número ou o nome da opção desejada."
+            "Entendido! 👨‍💻 Vou te transferir para um de nossos consultores.\n\n"
+            "Por favor, aguarde um momento que já vamos te atender."
         )
 
-    # Fluxo 1: Suporte técnico
-    if any(s in texto_usuario for s in ["1", "suporte", "técnico", "tecnico"]):
-        return (
-            "Entendido! Para suporte técnico na *Simplesmente*, "
-            "precisamos de alguns detalhes. 🛠️\n\n"
-            "Copie a mensagem abaixo, preencha e envie de volta:\n\n"
-            f"{formulario_template}"
-        )
-
-    # Fluxo 2: Serviços (Catálogo + Formulário)
-    if any(s in texto_usuario for s in ["2", "serviço", "serviços"]):
-        return (
-            "Ficamos felizes pelo interesse nos nossos serviços! 💡\n\n"
-            f"{servicos_template}\n\n"
-            "Para avançarmos com a sua solicitação, por favor preencha o formulário abaixo:\n\n"
-            f"{formulario_template}"
-        )
-
-    # Fluxo 3: Outros
-    if any(s in texto_usuario for s in ["3", "outros", "outro", "consultor", "falar"]):
-        return (
-            "Para outros assuntos ou falar com um consultor da *Simplesmente*, "
-            "precisamos identificar a sua necessidade. 👨‍💻\n\n"
-            "Por favor, use o modelo abaixo para detalhar a sua solicitação:\n\n"
-            f"{formulario_template}"
-        )
-
-    # Fluxo: Agradecimentos
-    if any(s in texto_usuario for s in ["obrigado", "valeu", "obrigada"]):
-        return "A *Simplesmente* agradece o seu contacto! Tenha um ótimo dia! 😊"
-
-    # Resposta Padrão (Fallback)
+    # --- Resposta Padrão (Fallback) ---
     return (
         "Ainda não entendi muito bem... 🤔\n\n"
-        "Se precisa de ajuda na *Simplesmente*, escolha uma das opções:\n"
-        "1️⃣ Suporte técnico\n"
+        "Para que eu possa te ajudar, escolha uma das opções:\n"
+        "1️⃣ Suporte\n"
         "2️⃣ Serviços\n"
-        "3️⃣ Outros"
+        "3️⃣ Consultor"
     )
