@@ -1,8 +1,10 @@
+import asyncio
 import random
+from typing import Dict, List
 from app.schemas import ChamadoInput
-from app.integrations import enviar_para_laravel
+from app.integrations import enviar_para_laravel, enviar_mensagem_whatsapp
 
-# --- Dicionário de Mensagens (Facilita a manutenção) ---
+# --- Dicionário de Mensagens ---
 TEXTOS = {
     "saudacoes": [
         "Olá! 👋 Seja bem-vindo ao atendimento da *Simplesmente*. Como posso ajudar?",
@@ -35,12 +37,56 @@ TEXTOS = {
     )
 }
 
+class MessageBufferManager:
+    """Gerencia o agrupamento de mensagens (Debounce)."""
+    def __init__(self):
+        self.buffers: Dict[str, List[str]] = {}
+        self.tasks: Dict[str, asyncio.Task] = {}
+
+    async def adicionar_e_processar(self, dados: ChamadoInput):
+        telefone = dados.telefone
+        if not telefone: return
+
+        # Acumula a mensagem no buffer do usuário
+        if telefone not in self.buffers:
+            self.buffers[telefone] = []
+        if dados.mensagem:
+            self.buffers[telefone].append(dados.mensagem)
+
+        # Se já existir uma tarefa de espera, cancela para reiniciar o tempo
+        if telefone in self.tasks:
+            self.tasks[telefone].cancel()
+
+        # Cria uma nova tarefa que aguarda 3 segundos de silêncio
+        self.tasks[telefone] = asyncio.create_task(self._executar_apos_espera(telefone, dados))
+
+    async def _executar_apos_espera(self, telefone: str, dados_originais: ChamadoInput):
+        try:
+            await asyncio.sleep(3.0) # Tempo de espera por novas mensagens
+            
+            # Une as mensagens acumuladas e limpa o buffer
+            conversa_completa = " ".join(self.buffers.get(telefone, []))
+            self.buffers.pop(telefone, None)
+            self.tasks.pop(telefone, None)
+
+            # Atualiza os dados para o processamento final
+            dados_originais.mensagem = conversa_completa
+            
+            # Gera a resposta com base na sua lógica de diálogos
+            resposta_texto = await obter_resposta_suporte(dados_originais)
+            
+            # Envia via API (Evolution) de forma assíncrona
+            await enviar_mensagem_whatsapp(telefone, resposta_texto)
+            
+        except asyncio.CancelledError:
+            pass # Ignora cancelamentos por novas mensagens
+
+# Instância global para ser usada no main.py
+buffer_manager = MessageBufferManager()
+
 async def obter_resposta_suporte(dados: ChamadoInput) -> str:
-    """
-    Orquestra os diálogos do bot Simplesmente.
-    """
+    """Orquestra os diálogos do bot Simplesmente."""
     
-    # 1. Fluxo de Envio para o Laravel (Formulário preenchido)
     if dados.is_formulario:
         sucesso = await enviar_para_laravel(dados)
         if sucesso:
@@ -50,36 +96,21 @@ async def obter_resposta_suporte(dados: ChamadoInput) -> str:
                 "🚀 Em breve, um técnico entrará em contato pelo seu telefone ou e-mail."
             )
         else:
-            return "⚠️ *Erro de Conexão:* Não consegui salvar seu chamado no sistema. Por favor, tente novamente em instantes."
+            return "⚠️ *Erro de Conexão:* Não consegui salvar seu chamado no sistema."
 
-    # 2. Processamento da Mensagem do Usuário
     mensagem = (dados.mensagem or "").lower().strip()
 
-    # --- Fluxo 1: Saudação e Menu Principal ---
     if any(s in mensagem for s in ["oi", "olá", "ola", "bom dia", "boa tarde", "boa noite", "inicio", "voltar"]):
         saudacao = random.choice(TEXTOS["saudacoes"])
         return f"{saudacao}\n\n{TEXTOS['menu_principal']}"
 
-    # --- Fluxo 2: Suporte Técnico (Opção 1) ---
     if any(s in mensagem for s in ["1", "suporte", "chamado", "tecnico", "técnico"]):
         return TEXTOS["modelo_chamado"]
 
-    # --- Fluxo 3: Serviços (Opção 2) ---
     if any(s in mensagem for s in ["2", "serviço", "serviços", "portfolio", "portfólio"]):
         return f"{TEXTOS['servicos_detalhados']}\n\nPara voltar ao menu, digite *Início*."
 
-    # --- Fluxo 4: Falar com Humano (Opção 3) ---
     if any(s in mensagem for s in ["3", "consultor", "humano", "falar", "atendente"]):
-        return (
-            "Entendido! 👨‍💻 Vou te transferir para um de nossos consultores.\n\n"
-            "Por favor, aguarde um momento que já vamos te atender."
-        )
+        return "Entendido! 👨‍💻 Vou te transferir para um de nossos consultores."
 
-    # --- Resposta Padrão (Fallback) ---
-    return (
-        "Ainda não entendi muito bem... 🤔\n\n"
-        "Para que eu possa te ajudar, escolha uma das opções:\n"
-        "1️⃣ Suporte\n"
-        "2️⃣ Serviços\n"
-        "3️⃣ Consultor"
-    )
+    return "Ainda não entendi muito bem... 🤔\n\nEscolha uma das opções: 1️⃣ Suporte, 2️⃣ Serviços ou 3️⃣ Consultor."
