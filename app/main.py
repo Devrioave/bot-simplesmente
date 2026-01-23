@@ -1,28 +1,28 @@
 # app/main.py
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, Request
 from app.schemas import ChamadoInput
-from app.services import buffer_manager # Importa o gestor de buffer configurado no services.py
+from app.services import buffer_manager
 
-# Inicialização da aplicação com o título da empresa
 app = FastAPI(title="Bot Simplesmente")
 
 @app.post("/webhook")
-async def processar_mensagem(input_data: ChamadoInput, background_tasks: BackgroundTasks):
-    """
-    Endpoint principal que recebe as requisições do n8n.
-    Agora utiliza um sistema de buffer (debounce) para evitar múltiplas respostas seguidas.
-    """
+async def processar_mensagem(request: Request, background_tasks: BackgroundTasks):
+    # Log agressivo para ver o que chega no terminal
+    body = await request.json()
+    print(f"\n--- 📥 DADOS RECEBIDOS DO N8N ---")
+    print(body)
+    print(f"--------------------------------\n")
     
-    # Verificamos se a entrada é um formulário estruturado ou uma mensagem comum
+    # Converte o JSON para o nosso formato estruturado
+    try:
+        input_data = ChamadoInput(**body)
+    except Exception as e:
+        print(f"❌ Erro na validação dos dados: {e}")
+        return {"status": "erro", "detalhe": str(e)}
+
     if input_data.is_formulario:
-        # Para formulários (abertura de chamado), processamos via background task 
-        # para garantir que o sistema Laravel responda sem travar o WhatsApp.
         background_tasks.add_task(buffer_manager.adicionar_e_processar, input_data)
     else:
-        # Para mensagens de chat, enviamos para o buffer que aguardará 
-        # 3 segundos de silêncio do utilizador antes de processar.
         await buffer_manager.adicionar_e_processar(input_data)
     
-    # Retorna um status de sucesso imediato. 
-    # A resposta real com o texto do bot será enviada depois via API externa.
     return {"status": "recebido", "modo": "buffer_ativado"}
